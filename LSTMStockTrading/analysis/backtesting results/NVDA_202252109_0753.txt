@@ -1,0 +1,39 @@
+======================================================================
+                    PERFORMANCE SUMMARY
+======================================================================
+Trading Period:
+  Start Date:           2020-12-14
+  End Date:             2025-09-19
+  Duration:             1197 trading days
+  Start Price:          $13.31
+  End Price:            $176.67
+  Buy & Hold Return:    1227.35%
+
+Strategy Performance:
+  Total Return:         -114.14%
+  Initial Capital:      $100,000.00
+  Final Portfolio Value: $-14,138.97
+  Absolute Gain/Loss:   $-114,138.97
+  Sharpe Ratio:         -0.672
+  Maximum Drawdown:     122.22%
+  Number of Trades:     2
+
+Strategy vs Buy & Hold:
+  Outperformance:       -1341.49%
+  Alpha Generated:      -1341.49%
+
+Signal Distribution:
+  Buy Signals:    214 (17.9%)
+  Hold Signals:     8 (0.7%)
+  Sell Signals:   975 (81.5%)
+
+Trade Analysis:
+  Win Rate:           0.0%
+  Average Trade P&L:  $-114043.98
+  Average Loss:       $-114043.98
+  Worst Trade:        $-114043.98
+  Profit Factor:      0.00
+
+Risk Metrics:
+  Risk Assessment:      Poor
+  Volatility (implied): -114138.97%

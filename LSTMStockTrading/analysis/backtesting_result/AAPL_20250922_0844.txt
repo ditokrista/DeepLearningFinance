@@ -1,0 +1,50 @@
+LSTM Trading Strategy Backtest Results
+Generated on: 2025-09-22 08:44:21
+Symbol: AAPL
+
+======================================================================
+                    PERFORMANCE SUMMARY
+======================================================================
+Trading Period:
+  Start Date:           2020-12-14
+  End Date:             2025-09-19
+  Duration:             1197 trading days
+  Start Price:          $121.78
+  End Price:            $241.28
+  Buy & Hold Return:    98.13%
+
+Strategy Performance:
+  Total Return:         89.61%
+  Initial Capital:      $100,000.00
+  Final Portfolio Value: $189,608.42
+  Absolute Gain/Loss:   $89,608.42
+  Sharpe Ratio:         0.641
+  Maximum Drawdown:     32.83%
+  Number of Trades:     519
+
+Strategy vs Buy & Hold:
+  Outperformance:       -8.52%
+  Alpha Generated:      -8.52%
+
+Signal Distribution:
+  Buy Signals:    520 (43.4%)
+  Hold Signals:    60 (5.0%)
+  Sell Signals:   617 (51.5%)
+
+Trade Analysis:
+  Win Rate:           64.1%
+  Average Trade P&L:  $528.75
+  Average Profit:     $3277.70
+  Best Trade:         $17737.94
+  Average Loss:       $-4377.99
+  Worst Trade:        $-21629.29
+  Profit Factor:      0.75
+
+Risk Metrics:
+  Risk Assessment:      Good
+  Volatility (implied): 139.77%
+======================================================================
+
+
+File generated automatically by LSTM Trading System
+Timestamp: 2025-09-22T08:44:21.504575

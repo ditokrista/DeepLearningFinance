@@ -1,0 +1,50 @@
+LSTM Trading Strategy Backtest Results
+Generated on: 2025-09-22 08:22:47
+Symbol: NVDA
+
+======================================================================
+                    PERFORMANCE SUMMARY
+======================================================================
+Trading Period:
+  Start Date:           2020-12-15
+  End Date:             2025-09-19
+  Duration:             1196 trading days
+  Start Price:          $13.36
+  End Price:            $176.67
+  Buy & Hold Return:    1222.38%
+
+Strategy Performance:
+  Total Return:         -15.66%
+  Initial Capital:      $100,000.00
+  Final Portfolio Value: $84,341.47
+  Absolute Gain/Loss:   $-15,658.53
+  Sharpe Ratio:         0.217
+  Maximum Drawdown:     72.90%
+  Number of Trades:     283
+
+Strategy vs Buy & Hold:
+  Outperformance:       -1238.04%
+  Alpha Generated:      -1238.04%
+
+Signal Distribution:
+  Buy Signals:    682 (57.0%)
+  Hold Signals:    16 (1.3%)
+  Sell Signals:   498 (41.6%)
+
+Trade Analysis:
+  Win Rate:           68.1%
+  Average Trade P&L:  $1011.82
+  Average Profit:     $4855.87
+  Best Trade:         $26871.07
+  Average Loss:       $-7188.82
+  Worst Trade:        $-36090.96
+  Profit Factor:      0.68
+
+Risk Metrics:
+  Risk Assessment:      Fair
+  Volatility (implied): -72.27%
+======================================================================
+
+
+File generated automatically by LSTM Trading System
+Timestamp: 2025-09-22T08:22:47.343143
