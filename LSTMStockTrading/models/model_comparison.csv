@@ -1,0 +1,19 @@
+Aspect,Original Model,Optimized Model,Impact
+Data Leakage Issue,[X] YES - Scaler fit incorrectly,[OK] FIXED - Proper splitting,CRITICAL - Invalid results
+Feature Engineering,[X] Single feature (close only),[OK] 12+ technical indicators,HIGH - Better predictions
+Look-back Period,30 days,60 days,MEDIUM - More context
+Model Architecture,Basic LSTM,Enhanced LSTM + FC,MEDIUM - Better capacity
+Hidden Dimension,128,256,MEDIUM - More capacity
+Number of Layers,2,3,MEDIUM - Deeper learning
+Normalization,[X] No layer norm,[OK] Layer + Batch norm,HIGH - Stable training
+Early Stopping,[X] No,[OK] Yes (patience=30),HIGH - Prevents overfitting
+Learning Rate Scheduler,[X] No,[OK] ReduceLROnPlateau,HIGH - Better convergence
+Gradient Clipping,[X] No,[OK] Yes (max_norm=1.0),MEDIUM - Prevents instability
+Batch Processing,[X] No - full dataset,[OK] Yes (batch_size=32),MEDIUM - Efficient training
+Train/Eval Mode,[X] No,[OK] Yes,MEDIUM - Correct inference
+Metrics Tracked,RMSE only,"RMSE, MAE, R2, MAPE",HIGH - Better evaluation
+Direction Accuracy,[X] Not tracked,[OK] Tracked,HIGH - Trading relevance
+Trading Metrics,[X] None,"[OK] Sharpe, Drawdown",HIGH - Trading decisions
+Reproducibility,[X] No,[OK] Yes (seed=42),MEDIUM - Debugging
+GPU Support,[X] No,[OK] Yes,MEDIUM - Speed
+Code Organization,[X] Basic,[OK] Professional,LOW - Maintainability
