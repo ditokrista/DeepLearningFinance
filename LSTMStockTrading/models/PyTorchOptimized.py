@@ -30,10 +30,10 @@ def set_seed(seed=42):
 
 set_seed(42)
 
-# Configuration
 class Config:
-    data_directory = Path(__file__).parent.parent
-    stock_symbol = "AAPL"  # Change as needed
+    # Use relative path that works in any environment
+    data_directory = Path(__file__).resolve().parent.parent
+    stock_symbol = "MSFT"  # Change as needed
     price_data_path = data_directory / "data" / f"{stock_symbol}.csv"
     
     # Data parameters

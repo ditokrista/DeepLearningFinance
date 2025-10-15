@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="ml4t (2)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="ml4t" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.10.17 (sftp://dito_@34.50.115.134:22/opt/python/3.10/bin/python3)" project-jdk-type="Python SDK" />
 </project>
