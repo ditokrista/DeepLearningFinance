@@ -12,6 +12,70 @@ import matplotlib.dates as mdates
 from datetime import datetime
 warnings.filterwarnings('ignore')
 
+
+# ==================== Feature Engineering ====================
+
+def calculate_technical_indicators(df):
+    """Calculate technical indicators matching PyTorchOptimized.py"""
+    df = df.copy()
+    df['returns'] = df['close'].pct_change()
+    df['sma_5'] = df['close'].rolling(window=5).mean()
+    df['sma_20'] = df['close'].rolling(window=20).mean()
+    df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+    df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = df['ema_12'] - df['ema_26']
+    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    df['bb_middle'] = df['close'].rolling(window=20).mean()
+    bb_std = df['close'].rolling(window=20).std()
+    df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
+    df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+    df['bb_position'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    df['momentum'] = df['close'] - df['close'].shift(4)
+    df['volatility'] = df['returns'].rolling(window=20).std()
+    df['roc'] = ((df['close'] - df['close'].shift(10)) / df['close'].shift(10)) * 100
+    return df
+
+# ==================== Model Architecture ====================
+
+class ImprovedLSTM(nn.Module):
+    """Enhanced LSTM matching PyTorchOptimized.py"""
+    def __init__(self, input_dim, hidden_dim, num_layers, dropout, output_dim):
+        super(ImprovedLSTM, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True,
+                           dropout=dropout if num_layers > 1 else 0, bidirectional=False)
+        self.layer_norm = nn.LayerNorm(hidden_dim)
+        self.fc1 = nn.Linear(hidden_dim, hidden_dim // 2)
+        self.fc2 = nn.Linear(hidden_dim // 2, hidden_dim // 4)
+        self.fc3 = nn.Linear(hidden_dim // 4, output_dim)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.bn1 = nn.BatchNorm1d(hidden_dim // 2)
+        self.bn2 = nn.BatchNorm1d(hidden_dim // 4)
+        
+    def forward(self, x):
+        lstm_out, _ = self.lstm(x)
+        out = lstm_out[:, -1, :]
+        out = self.layer_norm(out)
+        out = self.fc1(out)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.fc2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.fc3(out)
+        return out
+
+
 class LSTM(nn.Module):
     def __init__(self, input_dim, hidden_dim=128, num_layers=2, dropout=0.2, output_dim=1):
         super(LSTM, self).__init__()
@@ -66,36 +130,53 @@ class BacktestEngine:
                                 model,
                                 historical_data: pd.DataFrame,
                                 scaler,
-                                sequence_length: int = 59) -> pd.DataFrame:
-        """Generate simple trading signals based on LSTM predictions."""
+                                sequence_length: int = 60) -> pd.DataFrame:
+        """Generate trading signals using 12 features matching PyTorchOptimized.py"""
         
-        signals_df = pd.DataFrame(index=historical_data.index[sequence_length:])
+        # Calculate technical indicators
+        df_with_indicators = calculate_technical_indicators(historical_data)
         
-        # Pre-calculate volatility
-        returns = historical_data['close'].pct_change()
-        volatility = returns.rolling(window=self.volatility_window).std()
+        # Select features (must match PyTorchOptimized.py)
+        feature_columns = ['close', 'returns', 'sma_5', 'sma_20', 'rsi', 
+                          'macd', 'macd_signal', 'bb_position', 'bb_width',
+                          'momentum', 'volatility', 'roc']
+        
+        # Filter to available columns
+        feature_columns = [col for col in feature_columns if col in df_with_indicators.columns]
+        
+        # Remove NaN values
+        df_with_indicators = df_with_indicators.dropna().reset_index(drop=True)
+        
+        # Extract feature values
+        feature_values = df_with_indicators[feature_columns].values
+        
+        signals_df = pd.DataFrame()
         
         predictions = []
         current_prices = []
         signals = []
         
         # Generate predictions for entire dataset
-        for i in range(sequence_length, len(historical_data)):
-            # Prepare input sequence
-            sequence = historical_data['close'].iloc[i-sequence_length:i].values.reshape(-1, 1)
+        for i in range(sequence_length, len(feature_values)):
+            # Prepare input sequence with all features
+            sequence = feature_values[i-sequence_length:i]  # Shape: (sequence_length, num_features)
             scaled_sequence = scaler.transform(sequence)
             
             # Convert to tensor and add batch dimension
-            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)
+            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)  # Shape: (1, sequence_length, num_features)
             
             # Generate prediction
             model.eval()
             with torch.no_grad():
-                scaled_pred = model(input_tensor).numpy()
+                scaled_pred = model(input_tensor).cpu().numpy()
             
-            # Inverse transform prediction
-            prediction = scaler.inverse_transform(scaled_pred)[0, 0]
-            current_price = historical_data['close'].iloc[i]
+            # Inverse transform prediction (close price is first feature)
+            n_features = scaler.n_features_in_
+            dummy_pred = np.zeros((1, n_features))
+            dummy_pred[:, 0] = scaled_pred.flatten()
+            prediction = scaler.inverse_transform(dummy_pred)[0, 0]
+            
+            current_price = df_with_indicators['close'].iloc[i]
             
             predictions.append(prediction)
             current_prices.append(current_price)
@@ -587,16 +668,34 @@ def save_summary_to_file(summary_lines: list, symbol: str):
 
 # Update the main execution section
 if __name__ == "__main__":
-    
+    stock = "AAPL"
     data_directory = Path(__file__).parent.parent
-    model_path = data_directory / "models" / "complete_lstm_model.pth"
-    price_data_path = data_directory / "data" / "AAPL.csv"  # Change to your stock data
-    scaler_path = data_directory / "models" / "scaler.pkl"
+    model_path = data_directory / "models" / f"{stock}_optimized_model.pth"
+    price_data_path = data_directory / "data" / f"{stock}.csv"  # Change to your stock data
+    scaler_path = data_directory / "models" / f"{stock}_scaler_optimized.pkl"
     
     # Load model and data
-    model = torch.load(model_path, weights_only=False)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # Initialize model with correct architecture (matching PyTorchOptimized.py)
+    model = ImprovedLSTM(
+        input_dim=12,  # 12 features
+        hidden_dim=256,
+        num_layers=3,
+        dropout=0.3,
+        output_dim=1
+    ).to(device)
+    
+    # Load the trained weights
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.eval()
+    
     price_data = pd.read_csv(price_data_path)
     scaler = joblib.load(scaler_path)
+    
+    print(f"Model loaded with {sum(p.numel() for p in model.parameters()):,} parameters")
+    print(f"Input dimension: 12 features")
+    print(f"Scaler features: {scaler.n_features_in_}")
     
     print("=" * 50)
     print(f"BACKTESTING SYSTEM - {price_data_path.stem}")

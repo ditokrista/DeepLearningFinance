@@ -33,7 +33,7 @@ set_seed(42)
 # Configuration
 class Config:
     data_directory = Path(__file__).parent.parent
-    stock_symbol = "AAPL"  # Change as needed
+    stock_symbol = "NVDA"  # Change as needed
     price_data_path = data_directory / "data" / f"{stock_symbol}.csv"
     
     # Data parameters
@@ -335,7 +335,7 @@ def train_model(model, train_loader, val_loader, config):
     
     # Learning rate scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=10, verbose=True
+        optimizer, mode='min', factor=0.5, patience=10
     )
     
     # Early stopping
@@ -344,6 +344,7 @@ def train_model(model, train_loader, val_loader, config):
     train_losses = []
     val_losses = []
     best_val_loss = float('inf')
+    current_lr = config.learning_rate
     
     print(f"\n{'='*60}")
     print(f"Training on device: {config.device}")
@@ -387,13 +388,20 @@ def train_model(model, train_loader, val_loader, config):
         val_losses.append(val_loss)
         
         # Learning rate scheduling
+        old_lr = optimizer.param_groups[0]['lr']
         scheduler.step(val_loss)
+        new_lr = optimizer.param_groups[0]['lr']
+        
+        # Log learning rate changes
+        if new_lr != old_lr:
+            print(f"Epoch {epoch+1}: Reducing learning rate from {old_lr:.6f} to {new_lr:.6f}")
+            current_lr = new_lr
         
         # Print progress
         if (epoch + 1) % 10 == 0:
             print(f"Epoch [{epoch+1}/{config.num_epochs}] "
                   f"Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, "
-                  f"LR: {optimizer.param_groups[0]['lr']:.6f}")
+                  f"LR: {new_lr:.6f}")
         
         # Save best model
         if val_loss < best_val_loss:
