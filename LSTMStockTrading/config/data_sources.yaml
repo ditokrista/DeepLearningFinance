@@ -1,0 +1,196 @@
+# Data Sources Configuration
+# API configurations and data provider settings
+
+# Primary data source: Financial Modeling Prep
+fmp:
+  name: "Financial Modeling Prep"
+  enabled: true
+  priority: 1
+
+  # API configuration
+  api:
+    base_url: "https://financialmodelingprep.com/stable"
+    rate_limit: 300  # Requests per minute
+    timeout: 30  # Seconds
+    retry_attempts: 3
+    retry_delay: 2  # Seconds
+
+  # Data endpoints
+  endpoints:
+    historical_price: "/historical-price-eod/full"
+    intraday: "/historical-chart/{{interval}}"
+    company_profile: "/profile"
+    financial_statements: "/income-statement"
+    key_metrics: "/key-metrics"
+
+  # Data parameters
+  data:
+    default_period: "5y"  # 5 years of historical data
+    interval: "1day"  # daily, 1hour, 5min, etc.
+    adjust_prices: true  # Adjust for splits/dividends
+
+  # Caching
+  cache:
+    enabled: true
+    ttl: 86400  # 24 hours in seconds
+    directory: "artifacts/cache/fmp"
+
+# Future data sources (currently disabled)
+
+# Yahoo Finance (backup source)
+yfinance:
+  name: "Yahoo Finance"
+  enabled: false
+  priority: 2
+
+  data:
+    default_period: "5y"
+    interval: "1d"
+    auto_adjust: true
+    prepost: false  # Include pre/post market
+
+  cache:
+    enabled: true
+    ttl: 86400
+    directory: "artifacts/cache/yfinance"
+
+# Alpha Vantage
+alphavantage:
+  name: "Alpha Vantage"
+  enabled: false
+  priority: 3
+
+  api:
+    base_url: "https://www.alphavantage.co/query"
+    rate_limit: 5  # Requests per minute (free tier)
+    timeout: 30
+
+  data:
+    outputsize: "full"  # compact or full
+    datatype: "json"
+
+  cache:
+    enabled: true
+    ttl: 86400
+    directory: "artifacts/cache/alphavantage"
+
+# Fundamental data sources
+
+fundamentals:
+  enabled: false  # Enable when ready to add fundamental features
+
+  sources:
+    - "fmp"  # Use FMP for fundamentals too
+
+  features:
+    income_statement:
+      - "revenue"
+      - "net_income"
+      - "operating_income"
+      - "ebitda"
+
+    balance_sheet:
+      - "total_assets"
+      - "total_debt"
+      - "shareholders_equity"
+      - "cash_and_equivalents"
+
+    cash_flow:
+      - "operating_cash_flow"
+      - "free_cash_flow"
+      - "capex"
+
+    key_metrics:
+      - "pe_ratio"
+      - "price_to_book"
+      - "debt_to_equity"
+      - "roe"
+      - "roa"
+
+  # Fundamental data frequency
+  update_frequency: "quarterly"
+
+# Market microstructure data (future)
+microstructure:
+  enabled: false
+
+  features:
+    - "bid_ask_spread"
+    - "order_flow_imbalance"
+    - "volume_profile"
+    - "trade_intensity"
+
+  sources:
+    - "polygon"  # Polygon.io for tick data
+    - "alpaca"  # Alpaca for order book
+
+# Alternative data (future)
+alternative_data:
+  enabled: false
+
+  # Sentiment analysis
+  sentiment:
+    enabled: false
+    sources:
+      - "news_api"
+      - "twitter"
+      - "reddit"
+
+  # Economic indicators
+  economic:
+    enabled: false
+    indicators:
+      - "gdp_growth"
+      - "unemployment_rate"
+      - "inflation_rate"
+      - "interest_rates"
+    source: "fred"  # Federal Reserve Economic Data
+
+# Data quality checks
+quality_checks:
+  enabled: true
+
+  checks:
+    # Missing data
+    missing_data:
+      max_missing_pct: 0.05  # 5% threshold
+      action: "drop"  # drop, fill, warn
+
+    # Outliers
+    outliers:
+      method: "zscore"  # zscore, iqr, isolation_forest
+      threshold: 5.0  # Z-score threshold
+      action: "cap"  # cap, drop, warn
+
+    # Duplicates
+    duplicates:
+      check_enabled: true
+      action: "drop"  # drop, keep_last, keep_first
+
+    # Data freshness
+    freshness:
+      max_stale_days: 7
+      action: "warn"  # warn, error
+
+    # Price consistency
+    price_checks:
+      max_jump_pct: 0.50  # 50% single-day move = suspicious
+      check_negative_prices: true
+      check_zero_volume: true
+
+# Data preprocessing
+preprocessing:
+  # Handling corporate actions
+  corporate_actions:
+    adjust_for_splits: true
+    adjust_for_dividends: true
+
+  # Time zone handling
+  timezone:
+    market_timezone: "America/New_York"
+    convert_to_utc: false
+
+  # Resampling
+  resampling:
+    method: "last"  # last, mean, ohlc
+    fill_method: "ffill"  # forward fill for missing data

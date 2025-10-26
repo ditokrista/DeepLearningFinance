@@ -1,0 +1,168 @@
+# Base System Configuration
+# Production-ready quantitative trading system
+# Version: 1.0.0
+
+system:
+  name: "LSTM Stock Trading System"
+  version: "2.0.0"
+  environment: "production"  # Options: development, staging, production
+
+  # Logging configuration
+  logging:
+    level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    format: "structured"  # Options: structured, simple
+    output_dir: "logs"
+    rotation: "daily"  # daily, weekly, size-based
+    retention_days: 30
+
+  # Compute resources
+  compute:
+    device: "cuda"  # cuda, cpu, mps
+    num_gpus: 2
+    gpu_ids: [0, 1]
+    mixed_precision: true  # Use automatic mixed precision
+    num_workers: 4  # Data loading workers
+    pin_memory: true
+
+  # Random seeds for reproducibility
+  reproducibility:
+    seed: 42
+    deterministic: true  # Slower but reproducible
+    benchmark: false  # Set to true for speed if same input sizes
+
+# Data configuration
+data:
+  # Data storage
+  raw_data_dir: "data"
+  processed_data_dir: "artifacts/processed_data"
+  cache_dir: "artifacts/cache"
+
+  # Data sources
+  primary_source: "fmp"  # Financial Modeling Prep
+  backup_sources: []  # Future: ["yfinance", "alphavantage"]
+
+  # Data validation
+  validation:
+    check_missing: true
+    max_missing_pct: 0.05  # 5% max missing data
+    check_outliers: true
+    outlier_std_threshold: 5.0
+    check_stale_data: true
+    max_stale_days: 7
+
+  # Feature engineering
+  features:
+    technical_indicators:
+      - "returns"
+      - "sma_5"
+      - "sma_20"
+      - "sma_50"
+      - "sma_200"
+      - "rsi"
+      - "macd"
+      - "macd_signal"
+      - "bb_position"
+      - "bb_width"
+      - "momentum"
+      - "volatility"
+      - "roc"
+
+    calendar_features:
+      - "day_of_week"
+      - "month"
+      - "quarter"
+
+    scaling_method: "standard"  # Options: standard, minmax, robust
+
+# Trading configuration
+trading:
+  # Trading schedule
+  frequency: "daily"  # daily, intraday
+  rebalance_schedule: "weekly"  # daily, weekly, monthly
+
+  # Universe
+  universe:
+    type: "single_stock"  # single_stock, multi_stock, portfolio
+    symbols: ["AAPL", "MSFT", "NVDA", "TSLA", "INTC"]
+
+  # Transaction costs
+  costs:
+    commission: 0.0  # $0 commission (modern brokers)
+    spread_bps: 5  # 5 basis points spread
+    slippage_bps: 2  # 2 basis points slippage
+    market_impact_factor: 0.0001  # Linear market impact
+
+  # Risk limits
+  risk:
+    max_position_size: 1.0  # 100% of capital per position
+    max_leverage: 1.0  # No leverage
+    max_drawdown_limit: 0.25  # 25% drawdown circuit breaker
+    max_daily_loss: 0.05  # 5% max daily loss
+
+    # Position limits per stock
+    max_stock_weight: 1.0
+    min_stock_weight: 0.0
+
+# Experiment tracking
+experiments:
+  tracking_enabled: true
+  backend: "mlflow"  # mlflow, wandb, tensorboard
+
+  mlflow:
+    tracking_uri: "file:./artifacts/experiments/mlruns"
+    experiment_name: "lstm_trading_strategy"
+    artifact_location: "file:./artifacts/experiments/mlartifacts"
+
+  # What to log
+  log_metrics: true
+  log_params: true
+  log_artifacts: true
+  log_models: true
+  log_plots: true
+
+# Artifacts management
+artifacts:
+  base_dir: "artifacts"
+
+  # Model versioning
+  models:
+    save_best_only: true
+    save_frequency: "epoch"  # epoch, batch, step
+    keep_n_best: 5
+    naming_convention: "{model_type}_v{version}_{timestamp}"
+
+  # Results storage
+  results:
+    save_predictions: true
+    save_signals: true
+    save_portfolio_values: true
+    save_trades: true
+    save_metrics: true
+    output_format: "parquet"  # Options: csv, parquet, feather
+
+# Performance monitoring
+monitoring:
+  enabled: true
+
+  # Metrics to track
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"
+    - "sortino_ratio"
+    - "calmar_ratio"
+    - "max_drawdown"
+    - "win_rate"
+    - "profit_factor"
+
+  # Alerts
+  alerts:
+    enabled: false  # Enable email/slack alerts
+    drawdown_threshold: 0.15  # Alert if drawdown > 15%
+    error_alerts: true
+
+# Development settings
+development:
+  debug_mode: false
+  profiling: false
+  fast_dev_run: false  # Quick test with limited data
+  overfit_batches: 0  # For debugging: overfit on N batches
