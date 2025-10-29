@@ -1059,7 +1059,7 @@ def create_performance_summary(metrics: Dict, trades: list, signals_df: pd.DataF
 
 if __name__ == "__main__":
 
-    stock = "MSFT"  # Change to your stock symbol
+    stock = "AAPL"  # Change to your stock symbol
     data_directory = Path(__file__).resolve().parent.parent
     model_path = data_directory / "models" / f"{stock}_optimized_model.pth"
     price_data_path = data_directory / "data" / f"{stock}.csv"
