@@ -10,6 +10,8 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
 
+from .risk import PositionSnapshot, RiskAction, RiskConfig, RiskManager
+
 warnings.filterwarnings('ignore')
 
 
@@ -389,10 +391,8 @@ class ImprovedBacktestEngine:
         """Initialize improved backtesting engine."""
         self.config = config if config else BacktestConfig()
 
-        # Track state
-        self.peak_portfolio_value = self.config.initial_capital
-        self.current_drawdown = 0.0
-        self.in_drawdown_protection = False
+        self.risk_manager = RiskManager(RiskConfig.from_backtest_config(self.config))
+        self.risk_manager.reset()
 
         # Performance tracking
         self.trade_log = []
@@ -428,10 +428,9 @@ class ImprovedBacktestEngine:
             regime_multiplier = 1.0
 
         # Adjust for drawdown
-        if self.in_drawdown_protection:
-            drawdown_multiplier = self.config.drawdown_scale_factor
-        else:
-            drawdown_multiplier = 1.0
+        drawdown_multiplier = (
+            self.config.drawdown_scale_factor if self.risk_manager.drawdown_active else 1.0
+        )
 
         # Calculate final position size
         position_size = base_size * volatility_multiplier * regime_multiplier * drawdown_multiplier
@@ -646,10 +645,13 @@ class ImprovedBacktestEngine:
         print("RUNNING IMPROVED BACKTEST")
         print("=" * 70)
 
+        self.risk_manager.reset()
+
         capital = self.config.initial_capital
         position = 0  # 0: no position, 1: long
         trades = []
         portfolio_values = []
+        drawdown_alerted = False
 
         # Position tracking
         entry_price = 0
@@ -664,6 +666,7 @@ class ImprovedBacktestEngine:
         trailing_stop_exits = 0
         max_holding_exits = 0
         signal_exits = 0
+        drawdown_exits = 0
 
         for day_index, (idx, row) in enumerate(signals_df.iterrows()):
             current_price = row['Price']
@@ -680,42 +683,17 @@ class ImprovedBacktestEngine:
 
             portfolio_values.append(current_value)
 
-            # Update peak and drawdown tracking
-            if current_value > self.peak_portfolio_value:
-                self.peak_portfolio_value = current_value
-                self.in_drawdown_protection = False
+            self.risk_manager.update_portfolio_value(current_value)
 
-            self.current_drawdown = (self.peak_portfolio_value - current_value) / self.peak_portfolio_value
-
-            # Check drawdown circuit breaker
-            if self.current_drawdown > self.config.max_drawdown_limit:
-                if not self.in_drawdown_protection:
-                    print(f"\n⚠ WARNING: Maximum drawdown limit reached ({self.current_drawdown*100:.2f}%)")
-                    print("  Activating drawdown protection mode")
-                    self.in_drawdown_protection = True
-
-                # Force exit if in position
-                if position == 1:
-                    pnl = (current_price - entry_price) * shares
-                    trade_cost = abs(shares * current_price * self.config.transaction_cost)
-                    capital += pnl - trade_cost
-
-                    trades.append({
-                        'Date': idx,
-                        'Type': 'CLOSE',
-                        'Reason': 'DRAWDOWN_LIMIT',
-                        'Price': current_price,
-                        'Shares': shares,
-                        'PnL': pnl - trade_cost,
-                        'Days_Held': days_in_position,
-                        'Return_Pct': (current_price / entry_price - 1) * 100
-                    })
-
-                    position = 0
-                    shares = 0
-                    days_in_position = 0
-                    last_trade_day = day_index
-                    continue
+            if self.risk_manager.drawdown_active and not drawdown_alerted:
+                print(
+                    f"\n⚠ WARNING: Maximum drawdown limit reached "
+                    f"({self.risk_manager.current_drawdown * 100:.2f}%)"
+                )
+                print("  Activating drawdown protection mode")
+                drawdown_alerted = True
+            elif not self.risk_manager.drawdown_active and drawdown_alerted:
+                drawdown_alerted = False
 
             # Check if we can trade (minimum holding period)
             can_trade = (day_index - last_trade_day) >= self.config.min_holding_period
@@ -724,56 +702,54 @@ class ImprovedBacktestEngine:
             if position == 1:
                 days_in_position += 1
 
-                position_return = (current_price / entry_price) - 1
-                trailing_from_peak = (position_peak_price - current_price) / position_peak_price
+                snapshot = PositionSnapshot(
+                    symbol=row.get('Symbol', 'UNKNOWN'),
+                    timestamp=idx,
+                    position=position,
+                    shares=shares,
+                    entry_price=entry_price,
+                    current_price=current_price,
+                    days_held=days_in_position,
+                    capital=capital,
+                    portfolio_value=current_value,
+                    position_peak_price=position_peak_price
+                )
 
-                exit_triggered = False
-                exit_reason = ""
+                risk_decision = self.risk_manager.evaluate_position(snapshot)
 
-                # 1. Stop-loss check
-                if position_return < -self.config.stop_loss_pct:
-                    exit_triggered = True
-                    exit_reason = "STOP_LOSS"
-                    stop_loss_exits += 1
-
-                # 2. Take-profit check
-                elif position_return > self.config.take_profit_pct:
-                    exit_triggered = True
-                    exit_reason = "TAKE_PROFIT"
-                    take_profit_exits += 1
-
-                # 3. Trailing stop check
-                elif trailing_from_peak > self.config.trailing_stop_pct:
-                    exit_triggered = True
-                    exit_reason = "TRAILING_STOP"
-                    trailing_stop_exits += 1
-
-                # 4. Maximum holding period check
-                elif days_in_position >= self.config.max_holding_period:
-                    exit_triggered = True
-                    exit_reason = "MAX_HOLDING"
-                    max_holding_exits += 1
-
-                # Execute exit if triggered
-                if exit_triggered and can_trade:
+                if risk_decision.action == RiskAction.CLOSE_POSITION:
                     pnl = (current_price - entry_price) * shares
                     trade_cost = abs(shares * current_price * self.config.transaction_cost)
                     capital += pnl - trade_cost
 
+                    reason = risk_decision.reason
+                    if reason == "STOP_LOSS":
+                        stop_loss_exits += 1
+                    elif reason == "TAKE_PROFIT":
+                        take_profit_exits += 1
+                    elif reason == "TRAILING_STOP":
+                        trailing_stop_exits += 1
+                    elif reason == "MAX_HOLDING":
+                        max_holding_exits += 1
+                    elif reason == "DRAWDOWN_LIMIT":
+                        drawdown_exits += 1
+
                     trades.append({
                         'Date': idx,
                         'Type': 'CLOSE',
-                        'Reason': exit_reason,
+                        'Reason': reason,
                         'Price': current_price,
                         'Shares': shares,
                         'PnL': pnl - trade_cost,
                         'Days_Held': days_in_position,
-                        'Return_Pct': position_return * 100
+                        'Return_Pct': snapshot.return_pct * 100,
+                        'Risk_Metadata': risk_decision.metadata
                     })
 
                     position = 0
                     shares = 0
                     days_in_position = 0
+                    position_peak_price = 0
                     last_trade_day = day_index
                     continue
 
@@ -803,9 +779,13 @@ class ImprovedBacktestEngine:
                     position = 1
                     entry_price = current_price
 
-                    # DYNAMIC POSITION SIZING
-                    dynamic_position_size = self.calculate_position_size(current_volatility, regime)
-                    shares = int(capital * dynamic_position_size / current_price)
+                    # DYNAMIC POSITION SIZING + LIMIT ENFORCEMENT
+                    target_position_size = self.calculate_position_size(current_volatility, regime)
+                    applied_position_size, shares = self.risk_manager.allocate_position(
+                        capital=capital,
+                        price=current_price,
+                        desired_fraction=target_position_size
+                    )
 
                     if shares > 0:
                         trade_cost = abs(shares * current_price * self.config.transaction_cost)
@@ -820,7 +800,8 @@ class ImprovedBacktestEngine:
                             'Signal': position,
                             'Price': entry_price,
                             'Shares': shares,
-                            'Position_Size': dynamic_position_size,
+                            'Position_Size_Target': target_position_size,
+                            'Position_Size_Applied': applied_position_size,
                             'Volatility': current_volatility,
                             'Regime': regime.value,
                             'Cost': trade_cost
@@ -902,6 +883,7 @@ class ImprovedBacktestEngine:
             'Take_Profit_Exits': take_profit_exits,
             'Trailing_Stop_Exits': trailing_stop_exits,
             'Max_Holding_Exits': max_holding_exits,
+            'Drawdown_Exits': drawdown_exits,
             'Signal_Exits': signal_exits
         }
 
@@ -914,6 +896,7 @@ class ImprovedBacktestEngine:
         print(f"  Take-profit:    {take_profit_exits:3d}")
         print(f"  Trailing stop:  {trailing_stop_exits:3d}")
         print(f"  Max holding:    {max_holding_exits:3d}")
+        print(f"  Drawdown:       {drawdown_exits:3d}")
         print(f"  Signal change:  {signal_exits:3d}")
 
         return metrics, trades, portfolio_values
