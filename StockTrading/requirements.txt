@@ -1,0 +1,50 @@
+# Production Requirements
+# LSTM Stock Trading System v2.0
+
+# Core dependencies
+torch
+numpy
+pandas
+scikit-learn
+
+# Data & API
+requests
+python-dotenv
+yfinance
+
+# Configuration
+pyyaml
+hydra-core  # Advanced configuration management (optional)
+
+# Experiment tracking
+mlflow
+tensorboard
+
+# Plotting & visualization
+matplotlib
+seaborn
+plotly
+
+# Performance & utilities
+joblib
+tqdm
+numba  # Just-in-time compilation for speedups
+
+# Statistical analysis
+scipy
+statsmodels
+
+# Data formats
+pyarrow  # For Parquet files
+fastparquet
+
+# Testing (move to requirements-dev.txt for production)
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# pytest-mock>=3.11.0
+
+# Code quality (move to requirements-dev.txt for production)
+# black>=23.7.0
+# isort>=5.12.0
+# pylint>=2.17.0
+# mypy>=1.4.0

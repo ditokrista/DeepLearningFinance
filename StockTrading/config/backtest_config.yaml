@@ -1,0 +1,207 @@
+# Backtesting Configuration
+# Comprehensive backtesting parameters for production trading system
+
+backtest:
+  name: "lstm_daily_strategy"
+  description: "LSTM-based daily trading with risk management"
+
+  # Backtest period
+  period:
+    start_date: null  # null = use all available data, or "2020-01-01"
+    end_date: null  # null = use until last available date
+    min_history_days: 250  # Minimum data required
+
+  # Portfolio settings
+  portfolio:
+    initial_capital: 100000  # $100k starting capital
+    currency: "USD"
+    benchmark: "SPY"  # S&P 500 as benchmark
+
+  # Trading parameters
+  trading:
+    # Position sizing
+    position_sizing:
+      method: "volatility_scaled"  # fixed, kelly, volatility_scaled, equal_weight
+      base_size: 0.65  # 65% of capital (for single stock)
+      max_size: 0.70  # Maximum 70% position
+      min_size: 0.30  # Minimum 30% position
+      volatility_target: 0.15  # 15% annualized volatility target
+
+    # Signal thresholds (asymmetric to reduce bias)
+    signals:
+      buy_threshold: 0.02  # 2% predicted gain to buy
+      sell_threshold: 0.025  # 2.5% predicted loss to sell
+      hold_threshold: 0.015  # 1.5% neutral zone
+
+    # Holding periods
+    holding:
+      min_holding_period: 5  # Minimum 5 days
+      max_holding_period: 60  # Maximum 60 days (force exit)
+
+  # Risk management
+  risk:
+    # Stop-loss and take-profit
+    stop_loss:
+      enabled: true
+      type: "trailing"  # fixed, trailing, atr_based
+      fixed_pct: 0.08  # 8% fixed stop-loss
+      trailing_pct: 0.10  # 10% trailing stop from peak
+
+    take_profit:
+      enabled: true
+      target_pct: 0.15  # 15% take profit
+      partial_profit_pct: 0.10  # Take 50% off at 10% gain
+      partial_profit_fraction: 0.5
+
+    # Drawdown controls
+    drawdown:
+      max_drawdown_limit: 0.20  # 20% drawdown circuit breaker
+      scale_down_factor: 0.5  # Reduce position by 50% in drawdown
+      recovery_threshold: 0.10  # Resume normal size when drawdown < 10%
+
+    # Volatility adjustments
+    volatility:
+      high_vol_threshold: 0.03  # 3% daily volatility = high
+      low_vol_threshold: 0.01  # 1% daily volatility = low
+      high_vol_multiplier: 0.7  # Reduce size in high vol
+      low_vol_multiplier: 1.1  # Increase size in low vol
+
+  # Market regime filters
+  regime_filter:
+    enabled: true
+    method: "moving_average"  # moving_average, hidden_markov, regime_switching
+
+    moving_average:
+      short_window: 50  # 50-day MA
+      long_window: 200  # 200-day MA
+      use_price_position: true  # Consider price vs MA
+
+    # Trading rules based on regime
+    rules:
+      bullish:
+        allow_long: true
+        allow_short: false
+      bearish:
+        allow_long: false
+        allow_short: false  # Long-only strategy
+      sideways:
+        allow_long: true
+        allow_short: false
+
+  # Transaction costs
+  costs:
+    commission: 0.0  # $0 commission
+    spread_bps: 5  # 5 basis points bid-ask spread
+    slippage_model: "fixed"  # fixed, volume_based, volatility_based
+    slippage_bps: 2  # 2 basis points slippage
+
+  # Validation methods
+  validation:
+    # Walk-forward analysis
+    walk_forward:
+      enabled: false  # Enable for robustness testing
+      train_period_days: 252  # 1 year training
+      test_period_days: 63  # 3 months testing
+      step_days: 21  # Move forward by 1 month
+
+    # Monte Carlo simulation
+    monte_carlo:
+      enabled: false  # Enable for robustness testing
+      n_simulations: 1000
+      resample_method: "bootstrap"  # bootstrap, parametric
+      confidence_level: 0.95
+
+  # Performance metrics to calculate
+  metrics:
+    returns:
+      - "total_return"
+      - "annualized_return"
+      - "cumulative_return"
+
+    risk:
+      - "annual_volatility"
+      - "downside_deviation"
+      - "max_drawdown"
+      - "max_drawdown_duration"
+      - "calmar_ratio"
+
+    risk_adjusted:
+      - "sharpe_ratio"
+      - "sortino_ratio"
+      - "information_ratio"
+      - "omega_ratio"
+
+    trading:
+      - "win_rate"
+      - "profit_factor"
+      - "avg_win"
+      - "avg_loss"
+      - "expectancy"
+      - "trades_per_month"
+
+    advanced:
+      - "var_95"  # Value at Risk
+      - "cvar_95"  # Conditional VaR
+      - "tail_ratio"
+      - "common_sense_ratio"
+
+  # Output configuration
+  output:
+    save_results: true
+    output_dir: "artifacts/results/backtests"
+
+    # What to save
+    save_trades: true
+    save_signals: true
+    save_portfolio_values: true
+    save_metrics: true
+    save_plots: true
+
+    # Plot types
+    plots:
+      - "equity_curve"
+      - "drawdown"
+      - "returns_distribution"
+      - "monthly_returns"
+      - "rolling_metrics"
+      - "trade_analysis"
+
+    # Export formats
+    formats:
+      - "csv"
+      - "html"  # HTML report
+      - "json"  # Metrics as JSON
+
+# Optimization configuration (for strategy parameter tuning)
+optimization:
+  enabled: false
+
+  # Parameters to optimize
+  parameters:
+    buy_threshold:
+      min: 0.01
+      max: 0.05
+      step: 0.005
+
+    stop_loss_pct:
+      min: 0.05
+      max: 0.15
+      step: 0.01
+
+    base_position_size:
+      min: 0.3
+      max: 0.8
+      step: 0.1
+
+  # Optimization method
+  method: "grid_search"  # grid_search, random_search, genetic_algorithm
+
+  # Objective function
+  objective:
+    metric: "sharpe_ratio"  # Metric to maximize
+    direction: "maximize"
+
+  # Constraints
+  constraints:
+    min_trades: 20  # Minimum trades required
+    max_drawdown: 0.30  # Must be < 30%

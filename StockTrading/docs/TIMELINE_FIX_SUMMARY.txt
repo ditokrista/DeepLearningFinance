@@ -1,0 +1,158 @@
+================================================================================
+TIMELINE CONTINUITY FIX - SUMMARY
+================================================================================
+
+ISSUE REPORTED:
+"Disjunctioned data among training, validation, and test sets. 
+Plot returns jumpy curves instead of smooth timeline."
+
+ROOT CAUSE:
+Sequences were created SEPARATELY for each split (train/val/test), causing each
+split to start from index 0. This broke temporal continuity.
+
+================================================================================
+THE FIX (Lines 172-208 in PyTorchOptimized.py)
+================================================================================
+
+BEFORE (WRONG - Caused Jumps):
+-------------------------------
+1. Split data: train_data, val_data, test_data
+2. Scale each: train_scaled, val_scaled, test_scaled  
+3. Create sequences FROM EACH SPLIT:
+   - X_train from train_scaled (indices 0 to N_train)
+   - X_val from val_scaled (indices 0 to N_val)     ← Starts over!
+   - X_test from test_scaled (indices 0 to N_test)  ← Starts over!
+
+Result: Three disconnected segments in plot
+
+
+AFTER (CORRECT - Smooth Timeline):
+-----------------------------------
+1. Fit scaler on training data ONLY (prevent leakage)
+2. Transform ENTIRE dataset with training scaler stats
+3. Create sequences FROM ENTIRE DATASET:
+   - X_all from all scaled data (indices 0 to N_total)
+4. Split the sequences:
+   - X_train = X_all[0:train_size]
+   - X_val = X_all[train_size:train_size+val_size]
+   - X_test = X_all[train_size+val_size:]
+
+Result: Smooth, continuous timeline
+
+================================================================================
+KEY INSIGHT
+================================================================================
+
+Scaling transformation ≠ Data leakage
+
+SAFE:
+- Fit scaler on training data
+- Transform entire dataset with those stats
+- This is exactly what we do in production!
+
+DATA LEAKAGE:
+- Would be if scaler.fit() saw validation/test data
+- Our scaler ONLY learns from training data ✓
+
+TEMPORAL CONTINUITY:
+- Sequences must span actual timeline
+- Create from entire dataset, then split
+- Maintains date alignment ✓
+
+================================================================================
+CODE CHANGES
+================================================================================
+
+Changed From:
+-------------
+train_scaled = scaler.fit_transform(train_data)
+val_scaled = scaler.transform(val_data)
+test_scaled = scaler.transform(test_data)
+
+X_train, y_train = create_sequences(train_scaled, look_back)
+X_val, y_val = create_sequences(val_scaled, look_back)    # ← Breaks continuity
+X_test, y_test = create_sequences(test_scaled, look_back)  # ← Breaks continuity
+
+
+Changed To:
+-----------
+scaler.fit(train_data)                      # Learn from train only
+values_scaled = scaler.transform(values)    # Transform entire dataset
+
+X_all, y_all = create_sequences(values_scaled, look_back)  # Continuous!
+
+X_train = X_all[:train_seq_size]
+X_val = X_all[train_seq_size:train_seq_size + val_seq_size]
+X_test = X_all[train_seq_size + val_seq_size:]
+
+================================================================================
+EXPECTED RESULT
+================================================================================
+
+Before Fix:
+-----------
+Plot appearance: 
+[Train segment] --- JUMP --- [Val segment] --- JUMP --- [Test segment]
+
+After Fix:
+----------
+Plot appearance:
+[Train segment] → [Val segment] → [Test segment]  (Smooth transition!)
+
+The timeline now flows naturally from training through validation to test,
+with no discontinuities or jumps.
+
+================================================================================
+VERIFICATION
+================================================================================
+
+When you run: python PyTorchOptimized.py
+
+You should see:
+✓ Smooth, continuous price curves
+✓ Natural transitions between train/val/test
+✓ No jumps or disconnections
+✓ Dates align properly across all sets
+
+The plot should look like a continuous stock price chart with different
+colored sections, NOT three separate disconnected pieces.
+
+================================================================================
+TECHNICAL DETAILS
+================================================================================
+
+Timeline Example (100 days total):
+-----------------------------------
+Days 1-70:   Training (70 days)
+Days 71-85:  Validation (15 days)
+Days 86-100: Test (15 days)
+
+OLD APPROACH (Broken):
+Train sequences:  [1-60→61], [2-61→62], ..., [10-69→70]
+Val sequences:    [1-60→61], [2-61→62], ..., [WRONG!]
+Test sequences:   [1-60→61], [2-61→62], ..., [WRONG!]
+
+NEW APPROACH (Fixed):
+All sequences:    [1-60→61], [2-61→62], ..., [40-99→100]
+                           ↓
+Split sequences:
+Train:   [1-60→61], ..., [10-69→70]
+Val:     [11-70→71], ..., [25-84→85]    ← Continuous!
+Test:    [26-85→86], ..., [40-99→100]   ← Continuous!
+
+================================================================================
+FILES CREATED
+================================================================================
+
+1. PyTorchOptimized.py - Fixed code with smooth timeline
+2. CONTINUITY_FIX_EXPLAINED.md - Detailed explanation with visuals
+3. TIMELINE_FIX_SUMMARY.txt - This summary
+
+================================================================================
+STATUS: ✓ FIXED
+================================================================================
+
+The jumpy curve issue has been resolved. Run the optimized model now to see
+smooth, continuous predictions across all sets.
+
+Command: python PyTorchOptimized.py

@@ -1,0 +1,103 @@
+# LSTM Model Configuration
+# Default configuration for LSTM-based stock prediction
+
+model:
+  name: "ImprovedLSTM"
+  type: "lstm"
+  version: "1.0"
+
+  # Architecture
+  architecture:
+    input_dim: 12  # Number of features
+    hidden_dim: 128  # LSTM hidden size
+    num_layers: 2  # Number of LSTM layers
+    output_dim: 1  # Predicting single value (next day close)
+    dropout: 0.2  # Dropout rate between layers
+    bidirectional: false  # Use bidirectional LSTM
+
+    # Additional layers
+    use_attention: false  # Add attention mechanism
+    use_layer_norm: true  # Layer normalization
+    use_batch_norm: true  # Batch normalization in FC layers
+
+    # FC layers after LSTM
+    fc_layers: [128, 64, 32]  # Hidden dimensions for FC layers
+    activation: "relu"  # relu, elu, gelu, leaky_relu
+
+  # Sequence parameters
+  sequence:
+    lookback_window: 60  # Number of historical days to look back
+    prediction_horizon: 1  # Predict N days ahead
+    stride: 1  # Stride for creating sequences
+
+# Training configuration
+training:
+  # Optimization
+  optimizer:
+    type: "adam"  # adam, adamw, sgd, rmsprop
+    lr: 0.001  # Learning rate
+    weight_decay: 0.0001  # L2 regularization
+    betas: [0.9, 0.999]  # Adam betas
+    eps: 1.0e-08
+    amsgrad: false
+
+  # Learning rate scheduling
+  scheduler:
+    enabled: true
+    type: "reduce_on_plateau"  # reduce_on_plateau, cosine, step, exponential
+    mode: "min"
+    factor: 0.5  # Reduce LR by this factor
+    patience: 10  # Epochs with no improvement
+    min_lr: 1.0e-06
+    cooldown: 5  # Epochs to wait after LR reduction
+
+  # Loss function
+  loss:
+    type: "mse"  # mse, mae, huber, smooth_l1
+    reduction: "mean"
+
+  # Training loop
+  epochs: 100
+  batch_size: 64
+  gradient_clip_val: 1.0  # Gradient clipping
+  accumulate_grad_batches: 1  # Gradient accumulation
+
+  # Data split
+  train_split: 0.7  # 70% training
+  val_split: 0.15  # 15% validation
+  test_split: 0.15  # 15% test
+
+  # Early stopping
+  early_stopping:
+    enabled: true
+    monitor: "val_loss"
+    patience: 20
+    min_delta: 0.0001
+    mode: "min"
+
+  # Checkpointing
+  checkpoint:
+    save_top_k: 3  # Save top 3 models
+    monitor: "val_loss"
+    mode: "min"
+    save_last: true
+
+# Inference configuration
+inference:
+  batch_size: 256  # Larger batch for inference
+  use_best_checkpoint: true
+  return_confidence: true  # Return prediction intervals
+
+# Hyperparameter search (optional)
+hyperparameter_search:
+  enabled: false
+  method: "grid"  # grid, random, bayesian
+  n_trials: 50  # For random/bayesian search
+
+  # Search space
+  search_space:
+    hidden_dim: [64, 128, 256]
+    num_layers: [1, 2, 3]
+    dropout: [0.1, 0.2, 0.3, 0.4]
+    lr: [0.0001, 0.001, 0.01]
+    batch_size: [32, 64, 128]

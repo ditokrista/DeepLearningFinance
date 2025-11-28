@@ -1,0 +1,43 @@
+# Development Requirements
+# Additional dependencies for development and testing
+
+-r requirements.txt  # Include all production requirements
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.0
+pytest-xdist>=3.3.0  # Parallel testing
+pytest-timeout>=2.1.0
+pytest-benchmark>=4.0.0
+
+# Code quality
+black>=23.7.0  # Code formatter
+isort>=5.12.0  # Import sorter
+pylint>=2.17.0  # Linter
+mypy>=1.4.0  # Type checker
+flake8>=6.0.0  # Style guide enforcement
+
+# Pre-commit hooks
+pre-commit>=3.3.0
+
+# Documentation
+sphinx>=7.0.0
+sphinx-rtd-theme>=1.2.0
+sphinx-autodoc-typehints>=1.23.0
+
+# Jupyter notebooks
+jupyter>=1.0.0
+jupyterlab>=4.0.0
+ipykernel>=6.23.0
+ipywidgets>=8.0.0
+
+# Profiling & debugging
+line-profiler>=4.0.0
+memory-profiler>=0.61.0
+py-spy>=0.3.14  # Sampling profiler
+snakeviz>=2.2.0  # Profile visualization
+
+# Development utilities
+watchdog>=3.0.0  # File system monitoring
+python-decouple>=3.8  # Configuration management
