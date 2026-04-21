@@ -11,6 +11,8 @@ scikit-learn
 requests
 python-dotenv
 yfinance
+alpha-vantage
+tiingo
 
 # Configuration
 pyyaml

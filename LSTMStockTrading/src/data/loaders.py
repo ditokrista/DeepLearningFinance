@@ -26,7 +26,7 @@ def load_stock_data(symbol, data_dir=None):
         pd.DataFrame: Stock data with date column
     """
     if data_dir is None:
-        data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+        data_dir = Path(__file__).resolve().parent /  "price"
     else:
         data_dir = Path(data_dir)
 

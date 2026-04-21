@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="ml4t" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="ml4t" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="DeepLearningFinance" project-jdk-type="Python SDK" />
 </project>
