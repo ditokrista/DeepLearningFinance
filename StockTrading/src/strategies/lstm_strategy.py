@@ -7,6 +7,7 @@ from typing import Tuple, Dict, Optional
 import warnings
 import joblib
 from pathlib import Path
+from src.utils.torch_runtime import get_model_device, resolve_torch_runtime
 warnings.filterwarnings('ignore')
 
 
@@ -20,8 +21,9 @@ class LSTM(nn.Module):
         self.fc = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        device = x.device
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=device).requires_grad_()
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim, device=device).requires_grad_()
         out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
         out = self.fc(out[:, -1, :])
         return out
@@ -219,6 +221,7 @@ class TradingSignalGenerator:
         
         predictions = []
         current_prices = []
+        model_device = get_model_device(model)
         
         # Generate predictions for entire dataset
         for i in range(sequence_length, len(historical_data)):
@@ -227,12 +230,12 @@ class TradingSignalGenerator:
             scaled_sequence = scaler.transform(sequence)
             
             # Convert to tensor and add batch dimension
-            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)
+            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0).to(model_device)
             
             # Generate prediction
             model.eval()
             with torch.no_grad():
-                scaled_pred = model(input_tensor).numpy()
+                scaled_pred = model(input_tensor).detach().cpu().numpy()
             
             # Inverse transform prediction
             prediction = scaler.inverse_transform(scaled_pred)[0, 0]
@@ -381,12 +384,13 @@ def generate_live_signal(model, current_data, scaler, signal_generator, look_bac
     # Prepare the most recent sequence
     recent_sequence = current_data['close'].iloc[-look_back+1:].values.reshape(-1, 1)
     scaled_sequence = scaler.transform(recent_sequence)
-    input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)
+    model_device = get_model_device(model)
+    input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0).to(model_device)
     
     # Generate prediction
     model.eval()
     with torch.no_grad():
-        scaled_pred = model(input_tensor).numpy()
+        scaled_pred = model(input_tensor).detach().cpu().numpy()
     
     tomorrow_pred = scaler.inverse_transform(scaled_pred)[0, 0]
     today_price = current_data['close'].iloc[-1]
@@ -444,7 +448,9 @@ if __name__ == "__main__":
     price_data_path = data_directory / "data" / "MSFT.csv" # Change file name to your desired stock data
     scaler_path = data_directory / "models" / "scaler.pkl"
     
-    model = torch.load(model_path, weights_only=False)
+    runtime = resolve_torch_runtime('auto')
+    model = torch.load(model_path, map_location=runtime.device, weights_only=False)
+    model = model.to(runtime.device)
     price_data = pd.read_csv(price_data_path)
     scaler = joblib.load(scaler_path)
     

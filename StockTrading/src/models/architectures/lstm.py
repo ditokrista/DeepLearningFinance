@@ -19,19 +19,16 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import math
+from src.utils.torch_runtime import configure_global_seed, print_torch_runtime_summary, resolve_torch_runtime
 
 # Set random seeds for reproducibility
 def set_seed(seed=42):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    configure_global_seed(seed, deterministic=True, benchmark=False)
 
 set_seed(42)
 
 class Config:
+    runtime = resolve_torch_runtime('auto')
     # Use relative path that works in any environment
     data_directory = Path(__file__).resolve().parent.parent
     stock_symbol = "MSFT"  # Change as needed
@@ -58,7 +55,7 @@ class Config:
     gradient_clip = 1.0
     
     # Device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = runtime.device
 
 config = Config()
 
@@ -582,6 +579,8 @@ def main():
     print("\n" + "="*60)
     print("OPTIMIZED LSTM STOCK PRICE PREDICTION MODEL")
     print("="*60)
+    
+    print_torch_runtime_summary(config.runtime)
     
     # Prepare data
     (X_train, y_train, X_val, y_val, X_test, y_test,

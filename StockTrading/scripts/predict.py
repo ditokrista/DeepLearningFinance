@@ -52,11 +52,11 @@ def main():
 
     # Set device
     if args.no_cuda:
-        device = torch.device('cpu')
-    else:
-        device = config.device
+        config.compute.device = 'cpu'
+    config.refresh_runtime()
+    device = config.device
 
-    print(f"Using device: {device}")
+    print(f"Using device: {device} ({config.runtime.backend})")
 
     # Load scaler
     print("Loading scaler...")

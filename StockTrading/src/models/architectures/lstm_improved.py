@@ -30,20 +30,17 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import seaborn as sns
 from typing import Tuple, Dict, List
 import math
+from src.utils.torch_runtime import configure_global_seed, print_torch_runtime_summary, resolve_torch_runtime
 
 # Set random seeds
 def set_seed(seed=42):
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    configure_global_seed(seed, deterministic=True, benchmark=False)
 
 set_seed(42)
 
 # ==================== Configuration ====================
 class Config:
+    runtime = resolve_torch_runtime('auto')
     data_directory = Path(__file__).parent.parent
     stock_symbol = "AAPL"
     price_data_path = data_directory / "data" / f"{stock_symbol}.csv"
@@ -82,7 +79,7 @@ class Config:
     # Ensemble
     n_models = 3  # Number of models in ensemble
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = runtime.device
 
 config = Config()
 
@@ -818,6 +815,8 @@ def main():
     print(f"IMPROVED FINANCIAL LSTM - REALISTIC EVALUATION")
     print(f"{'='*80}\n")
     
+    print_torch_runtime_summary(config.runtime)
+
     # Load data
     df = pd.read_csv(config.price_data_path)
     df['date'] = pd.to_datetime(df['date'])

@@ -9,6 +9,8 @@ from pathlib import Path
 import torch
 import yaml
 
+from src.utils.torch_runtime import TorchRuntime, resolve_torch_runtime
+
 
 @dataclass
 class ModelConfig:
@@ -67,13 +69,69 @@ class PathConfig:
 
 
 @dataclass
+class ComputeConfig:
+    device: str = 'auto'
+    mixed_precision: bool = False
+    num_workers: int = 0
+    pin_memory: bool = True
+    deterministic: bool = True
+    benchmark: bool = False
+    require_gpu: bool = False
+
+
+@dataclass
 class Config:
     """Master configuration"""
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     data: DataConfig = field(default_factory=DataConfig)
     paths: PathConfig = field(default_factory=PathConfig)
-    device: torch.device = field(default_factory=lambda: torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    compute: ComputeConfig = field(default_factory=ComputeConfig)
+    device: torch.device = field(init=False)
+    runtime: TorchRuntime = field(init=False, repr=False)
+
+    def __post_init__(self):
+        self._apply_base_config_defaults()
+        self.refresh_runtime()
+
+    def _apply_base_config_defaults(self):
+        base_config_path = self.paths.project_root / "config" / "base_config.yaml"
+        if not base_config_path.exists():
+            return
+
+        with open(base_config_path, 'r') as f:
+            base_config = yaml.safe_load(f) or {}
+
+        self._apply_system_settings(base_config)
+
+    def _apply_system_settings(self, config_dict):
+        system_config = config_dict.get('system', {})
+        compute_config = system_config.get('compute', {})
+        reproducibility_config = system_config.get('reproducibility', {})
+
+        for key in ('device', 'mixed_precision', 'num_workers', 'pin_memory'):
+            if key in compute_config and hasattr(self.compute, key):
+                setattr(self.compute, key, compute_config[key])
+
+        if 'deterministic' in reproducibility_config:
+            self.compute.deterministic = reproducibility_config['deterministic']
+        if 'benchmark' in reproducibility_config:
+            self.compute.benchmark = reproducibility_config['benchmark']
+        if 'seed' in reproducibility_config:
+            self.training.seed = reproducibility_config['seed']
+
+        data_config = config_dict.get('data') or {}
+        features_config = data_config.get('features', {})
+        if 'scaling_method' in features_config:
+            self.data.scaler_type = features_config['scaling_method']
+
+    def refresh_runtime(self, device_override=None):
+        requested_device = device_override or self.compute.device
+        self.runtime = resolve_torch_runtime(
+            requested_device,
+            require_accelerator=self.compute.require_gpu
+        )
+        self.device = self.runtime.device
 
     def to_dict(self):
         """Convert config to dictionary"""
@@ -103,6 +161,17 @@ class Config:
                 'use_technical_indicators': self.data.use_technical_indicators,
                 'feature_set': self.data.feature_set,
                 'scaler_type': self.data.scaler_type,
+            },
+            'compute': {
+                'device': self.compute.device,
+                'mixed_precision': self.compute.mixed_precision,
+                'num_workers': self.compute.num_workers,
+                'pin_memory': self.compute.pin_memory,
+                'deterministic': self.compute.deterministic,
+                'benchmark': self.compute.benchmark,
+                'require_gpu': self.compute.require_gpu,
+                'resolved_device': str(self.device),
+                'backend': self.runtime.backend,
             }
         }
 
@@ -110,30 +179,75 @@ class Config:
         """Save configuration to YAML file"""
         path = Path(path)
         with open(path, 'w') as f:
-            yaml.dump(self.to_dict(), f, default_flow_style=False)
+            yaml.safe_dump(self.to_dict(), f, default_flow_style=False, sort_keys=False)
 
     @classmethod
     def from_dict(cls, config_dict):
         """Create config from dictionary"""
         config = cls()
+        config_dict = config_dict or {}
+        config._apply_system_settings(config_dict)
 
-        # Update model config
-        if 'model' in config_dict:
-            for key, value in config_dict['model'].items():
-                if hasattr(config.model, key):
-                    setattr(config.model, key, value)
+        model_config = config_dict.get('model') or {}
+        architecture_config = model_config.get('architecture', {})
+        sequence_config = model_config.get('sequence', {})
+        model_name = str(model_config.get('name', '')).lower()
 
-        # Update training config
-        if 'training' in config_dict:
-            for key, value in config_dict['training'].items():
-                if hasattr(config.training, key):
-                    setattr(config.training, key, value)
+        if 'simple' in model_name:
+            config.model.model_type = 'simple'
+        elif 'improved' in model_name or 'enhanced' in model_name:
+            config.model.model_type = 'enhanced'
 
-        # Update data config
-        if 'data' in config_dict:
-            for key, value in config_dict['data'].items():
-                if hasattr(config.data, key):
-                    setattr(config.data, key, value)
+        for key, value in model_config.items():
+            if hasattr(config.model, key):
+                setattr(config.model, key, value)
+
+        for key, value in architecture_config.items():
+            if hasattr(config.model, key):
+                setattr(config.model, key, value)
+
+        if 'lookback_window' in sequence_config:
+            config.data.look_back = sequence_config['lookback_window']
+
+        training_config = config_dict.get('training') or {}
+        optimizer_config = training_config.get('optimizer', {})
+        early_stopping_config = training_config.get('early_stopping', {})
+
+        for key, value in training_config.items():
+            if hasattr(config.training, key):
+                setattr(config.training, key, value)
+
+        if 'epochs' in training_config:
+            config.training.num_epochs = training_config['epochs']
+        if 'gradient_clip_val' in training_config:
+            config.training.gradient_clip = training_config['gradient_clip_val']
+        if 'train_split' in training_config:
+            config.data.train_ratio = training_config['train_split']
+        if 'val_split' in training_config:
+            config.data.validation_ratio = training_config['val_split']
+        if 'test_split' in training_config:
+            config.data.test_ratio = training_config['test_split']
+        if 'lr' in optimizer_config:
+            config.training.learning_rate = optimizer_config['lr']
+        if 'patience' in early_stopping_config:
+            config.training.patience = early_stopping_config['patience']
+
+        data_config = config_dict['data'] or {}
+        features_config = data_config.get('features', {})
+
+        for key, value in data_config.items():
+            if hasattr(config.data, key):
+                setattr(config.data, key, value)
+
+        if 'scaling_method' in features_config:
+            config.data.scaler_type = features_config['scaling_method']
+
+        if 'compute' in config_dict:
+            for key, value in config_dict['compute'].items():
+                if hasattr(config.compute, key):
+                    setattr(config.compute, key, value)
+
+        config.refresh_runtime()
 
         return config
 
@@ -172,7 +286,14 @@ class Config:
         print(f"  Validation ratio: {self.data.validation_ratio}")
         print(f"  Feature set: {self.data.feature_set}")
 
-        print(f"\nDevice: {self.device}")
+        print("\nCompute Configuration:")
+        print(f"  Requested device: {self.compute.device}")
+        print(f"  Resolved device: {self.device}")
+        print(f"  Backend: {self.runtime.backend}")
+        print(f"  Device name: {self.runtime.device_name}")
+        print(f"  Mixed precision: {self.compute.mixed_precision and self.device.type != 'cpu'}")
+        print(f"  Num workers: {self.compute.num_workers}")
+        print(f"  Pin memory: {self.compute.pin_memory and self.device.type != 'cpu'}")
         print("="*60 + "\n")
 
 

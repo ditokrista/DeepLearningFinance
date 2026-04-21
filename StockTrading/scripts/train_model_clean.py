@@ -26,8 +26,8 @@ def parse_arguments():
     """Parse command-line arguments"""
     parser = argparse.ArgumentParser(description='Train LSTM model for stock price prediction')
 
-    parser.add_argument('--symbol', type=str, default='AAPL',
-                        help='Stock symbol (default: AAPL)')
+    parser.add_argument('--symbol', type=str, default='GOOG',
+                        help='Stock symbol (default: GOOG)')
     parser.add_argument('--model-type', type=str, default='simple',
                         choices=['enhanced', 'simple'],
                         help='Model type (default: simple)')
@@ -66,9 +66,6 @@ def main():
     # Parse arguments
     args = parse_arguments()
 
-    # Set random seed
-    set_seed(args.seed)
-
     # Load or create config
     if args.config:
         config = Config.load(args.config)
@@ -93,7 +90,15 @@ def main():
 
     # Override device if --no-cuda
     if args.no_cuda:
-        config.device = torch.device('cpu')
+        config.compute.device = 'cpu'
+
+    config.refresh_runtime()
+
+    set_seed(
+        config.training.seed,
+        deterministic=config.compute.deterministic,
+        benchmark=config.compute.benchmark,
+    )
 
     # Print configuration
     print("\n" + "="*60)
@@ -122,7 +127,9 @@ def main():
         data['y_train'],
         data['X_val'],
         data['y_val'],
-        batch_size=config.training.batch_size
+        batch_size=config.training.batch_size,
+        num_workers=config.compute.num_workers,
+        pin_memory=config.compute.pin_memory and config.device.type != 'cpu'
     )
 
     # Step 3: Initialize model
@@ -151,6 +158,7 @@ def main():
         patience=config.training.patience,
         gradient_clip=config.training.gradient_clip,
         save_path=save_path,
+        mixed_precision=config.compute.mixed_precision and config.device.type != 'cpu',
         verbose=True
     )
 

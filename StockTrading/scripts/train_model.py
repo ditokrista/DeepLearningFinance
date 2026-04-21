@@ -21,9 +21,15 @@ from torch.autograd import Variable
 import requests
 from pathlib import Path
 import os
+import sys
 
 data_directory = Path(__file__).parent.parent
-price_data_path = data_directory / "data" / "AAPL.csv" # Change file name to your desired stock data
+if str(data_directory) not in sys.path:
+    sys.path.insert(0, str(data_directory))
+
+from src.utils.torch_runtime import print_torch_runtime_summary, resolve_torch_runtime
+
+price_data_path = data_directory / "src" / "data" / "price" / "GOOG.csv" # Change file name to your desired stock data
 
 price_data = pd.read_csv(price_data_path) 
 price_data["date"] = pd.to_datetime(price_data["date"])
@@ -108,6 +114,17 @@ y_validation = torch.from_numpy(y_validation).type(torch.Tensor)
 x_test = torch.from_numpy(x_test).type(torch.Tensor)
 y_test = torch.from_numpy(y_test).type(torch.Tensor)
 
+runtime = resolve_torch_runtime('auto')
+device = runtime.device
+print_torch_runtime_summary(runtime)
+
+x_train = x_train.to(device)
+y_train = y_train.to(device)
+x_validation = x_validation.to(device)
+y_validation = y_validation.to(device)
+x_test = x_test.to(device)
+y_test = y_test.to(device)
+
 print(y_train.size(), x_train.size(), y_validation.size(), x_validation.size(), y_test.size(), x_test.size())
 
 input_dim = 1
@@ -145,7 +162,7 @@ class LSTM(nn.Module):
 
         return out
 
-model = LSTM(input_dim, hidden_dim, num_layers, dropout, output_dim)
+model = LSTM(input_dim, hidden_dim, num_layers, dropout, output_dim).to(device)
 
 loss_fn = torch.nn.MSELoss(reduction='mean')
 
@@ -180,19 +197,19 @@ for t in range(num_epochs):
 
 
 
-print(np.shape(y_train_pred))
-print(np.shape(y_validation_pred))
+print(tuple(y_train_pred.shape))
+print(tuple(y_validation_pred.shape))
 
 y_test_pred = model(x_test)
 
-y_validation_pred = scaler.inverse_transform(y_validation_pred.detach().numpy())
-y_validation = scaler.inverse_transform(y_validation.detach().numpy())
+y_validation_pred = scaler.inverse_transform(y_validation_pred.detach().cpu().numpy())
+y_validation = scaler.inverse_transform(y_validation.detach().cpu().numpy())
 
-y_train_pred = scaler.inverse_transform(y_train_pred.detach().numpy())
-y_train = scaler.inverse_transform(y_train.detach().numpy())
+y_train_pred = scaler.inverse_transform(y_train_pred.detach().cpu().numpy())
+y_train = scaler.inverse_transform(y_train.detach().cpu().numpy())
 
-y_test_pred = scaler.inverse_transform(y_test_pred.detach().numpy())
-y_test = scaler.inverse_transform(y_test.detach().numpy())
+y_test_pred = scaler.inverse_transform(y_test_pred.detach().cpu().numpy())
+y_test = scaler.inverse_transform(y_test.detach().cpu().numpy())
 
 trainScore = math.sqrt(mean_squared_error(y_train[:,0], y_train_pred[:,0]))
 print(f"Train Score: {trainScore:.2f} RMSE")
@@ -234,5 +251,5 @@ plt.show()
 
 # Save complete model instead of just state_dict
 model_path = data_directory / "models" / "complete_lstm_model.pth"
-torch.save(model, model_path)
+torch.save(model.cpu(), model_path)
 print(f"Model saved to: {model_path}")

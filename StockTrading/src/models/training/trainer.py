@@ -7,6 +7,7 @@ Contains training logic, early stopping, and training utilities.
 import torch
 import torch.nn as nn
 from pathlib import Path
+from src.utils.torch_runtime import autocast_context, configure_global_seed, create_grad_scaler
 
 
 class EarlyStopping:
@@ -76,6 +77,7 @@ class ModelTrainer:
         patience (int): Early stopping patience
         gradient_clip (float): Max norm for gradient clipping
         save_path (Path or str, optional): Path to save best model
+        mixed_precision (bool): Whether to use mixed precision training
     """
 
     def __init__(
@@ -88,7 +90,8 @@ class ModelTrainer:
         num_epochs=200,
         patience=10,
         gradient_clip=1.0,
-        save_path=None
+        save_path=None,
+        mixed_precision=False
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
@@ -97,13 +100,16 @@ class ModelTrainer:
         self.num_epochs = num_epochs
         self.gradient_clip = gradient_clip
         self.save_path = save_path
+        self.non_blocking = self.device.type != 'cpu'
+        self.mixed_precision = mixed_precision and self.device.type != 'cpu'
+        self.grad_scaler = create_grad_scaler(self.device, enabled=self.mixed_precision)
 
         # Loss function
         self.criterion = nn.MSELoss()
 
         # Optimizer with weight decay (L2 regularization)
         self.optimizer = torch.optim.AdamW(
-            model.parameters(),
+            self.model.parameters(),
             lr=learning_rate,
             weight_decay=1e-5
         )
@@ -135,24 +141,32 @@ class ModelTrainer:
         train_loss = 0
 
         for X_batch, y_batch in self.train_loader:
-            X_batch = X_batch.to(self.device)
-            y_batch = y_batch.to(self.device)
+            X_batch = X_batch.to(self.device, non_blocking=self.non_blocking)
+            y_batch = y_batch.to(self.device, non_blocking=self.non_blocking)
 
-            # Forward pass
-            predictions = self.model(X_batch)
-            loss = self.criterion(predictions.squeeze(), y_batch)
+            self.optimizer.zero_grad(set_to_none=True)
 
-            # Backward pass
-            self.optimizer.zero_grad()
-            loss.backward()
+            with autocast_context(self.device, enabled=self.mixed_precision):
+                predictions = self.model(X_batch)
+                loss = self.criterion(predictions.squeeze(), y_batch)
 
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(),
-                self.gradient_clip
-            )
+            if self.grad_scaler.is_enabled():
+                self.grad_scaler.scale(loss).backward()
+                self.grad_scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    self.gradient_clip
+                )
+                self.grad_scaler.step(self.optimizer)
+                self.grad_scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    self.gradient_clip
+                )
+                self.optimizer.step()
 
-            self.optimizer.step()
             train_loss += loss.item()
 
         return train_loss / len(self.train_loader)
@@ -191,6 +205,7 @@ class ModelTrainer:
         if verbose:
             print(f"\n{'='*60}")
             print(f"Training on device: {self.device}")
+            print(f"Mixed precision: {self.mixed_precision}")
             print(f"{'='*60}\n")
 
         for epoch in range(self.num_epochs):
@@ -247,6 +262,7 @@ def train_model(
     patience=10,
     gradient_clip=1.0,
     save_path=None,
+    mixed_precision=False,
     verbose=True
 ):
     """
@@ -262,6 +278,7 @@ def train_model(
         patience (int): Early stopping patience
         gradient_clip (float): Max norm for gradient clipping
         save_path (Path or str, optional): Path to save best model
+        mixed_precision (bool): Whether to use mixed precision training
         verbose (bool): Whether to print progress
 
     Returns:
@@ -276,7 +293,8 @@ def train_model(
         num_epochs=num_epochs,
         patience=patience,
         gradient_clip=gradient_clip,
-        save_path=save_path
+        save_path=save_path,
+        mixed_precision=mixed_precision
     )
 
     history = trainer.train(verbose=verbose)
@@ -284,21 +302,13 @@ def train_model(
     return history['train_losses'], history['val_losses']
 
 
-def set_seed(seed=42):
+def set_seed(seed=42, deterministic=True, benchmark=False):
     """
     Set random seeds for reproducibility
 
     Args:
         seed (int): Random seed
+        deterministic (bool): Whether to set deterministic mode
+        benchmark (bool): Whether to set benchmark mode
     """
-    import numpy as np
-    import random
-
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    configure_global_seed(seed, deterministic=deterministic, benchmark=benchmark)

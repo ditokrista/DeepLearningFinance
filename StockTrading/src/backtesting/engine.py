@@ -9,6 +9,7 @@ from pathlib import Path
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
+from src.utils.torch_runtime import get_model_device, resolve_torch_runtime
 
 warnings.filterwarnings('ignore')
 
@@ -295,7 +296,7 @@ def infer_model_dims_from_state_dict(state_dict: OrderedDict) -> Dict[str, int]:
         raise ValueError(f"Failed to infer model dimensions: {e}")
 
 
-def load_model_safe(model_path: Path, default_config: Optional[Dict] = None) -> nn.Module:
+def load_model_safe(model_path: Path, default_config: Optional[Dict] = None, device: Optional[torch.device] = None) -> nn.Module:
     """Safely load a PyTorch model from various checkpoint formats."""
 
     print(f"\nLoading model from: {model_path}")
@@ -311,6 +312,8 @@ def load_model_safe(model_path: Path, default_config: Optional[Dict] = None) -> 
     if isinstance(checkpoint, nn.Module):
         print("✓ Loaded full model object")
         model = checkpoint
+        if device is not None:
+            model = model.to(device)
         model.eval()
         return model
 
@@ -361,6 +364,8 @@ def load_model_safe(model_path: Path, default_config: Optional[Dict] = None) -> 
                 print(f"  Unexpected keys: {unexpected}")
             print("✓ State dict loaded (non-strict mode)")
 
+        if device is not None:
+            model = model.to(device)
         model.eval()
         return model
 
@@ -538,6 +543,7 @@ class ImprovedBacktestEngine:
         print(f"\nGenerating predictions for {len(feature_data) - sequence_length} time steps...")
 
         model.eval()
+        model_device = get_model_device(model)
 
         with torch.no_grad():
             for i in range(sequence_length, len(feature_data)):
@@ -546,10 +552,10 @@ class ImprovedBacktestEngine:
                 scaled_sequence = scaler.transform(sequence)
 
                 # Convert to tensor
-                input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)
+                input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0).to(model_device)
 
                 # Generate prediction
-                scaled_pred = model(input_tensor).cpu().numpy()
+                scaled_pred = model(input_tensor).detach().cpu().numpy()
 
                 # Inverse transform prediction
                 n_features = scaler.n_features_in_
@@ -636,10 +642,9 @@ class ImprovedBacktestEngine:
         - Trailing stop
         - Volatility-based position sizing
         - Maximum drawdown protection
-        - Extended holding periods
-
-        Returns:
-            Tuple of (metrics dict, trades list, portfolio values list)
+        - Trend filtering
+        - Market regime detection
+        - Enhanced performance tracking
         """
 
         print("\n" + "=" * 70)
@@ -1081,12 +1086,15 @@ if __name__ == "__main__":
         'output_dim': 1
     }
 
+    runtime = resolve_torch_runtime('auto')
+
     # Load model
     try:
-        model = load_model_safe(model_path, default_config=default_config)
+        model = load_model_safe(model_path, default_config=default_config, device=runtime.device)
         print(f"\n✓ Model successfully loaded")
         print(f"  Type: {type(model).__name__}")
         print(f"  Architecture: input={model.input_dim}, hidden={model.hidden_dim}, layers={model.num_layers}")
+        print(f"  Device: {runtime.device} ({runtime.backend})")
     except Exception as e:
         print(f"\n✗ Failed to load model: {e}")
         raise

@@ -10,6 +10,6 @@ symbol = "GOOG"
 price_data_path = data_directory.parent / "src" / "data" / "price" / f"{symbol}.csv"
 
 ts = TimeSeries(key=API_KEY, output_format='pandas')
-data, meta_data = ts.get_daily(symbol=symbol, outputsize='full')
+data, meta_data = ts.get_daily(symbol=symbol)
 data.to_csv(price_data_path)
 print(f"Data successfully saved to: {price_data_path}")

@@ -244,7 +244,16 @@ def prepare_data(
     }
 
 
-def create_data_loaders(X_train, y_train, X_val, y_val, batch_size=32, shuffle_train=True):
+def create_data_loaders(
+    X_train,
+    y_train,
+    X_val,
+    y_val,
+    batch_size=32,
+    shuffle_train=True,
+    num_workers=0,
+    pin_memory=False,
+):
     """
     Create PyTorch DataLoaders from numpy arrays
 
@@ -252,6 +261,8 @@ def create_data_loaders(X_train, y_train, X_val, y_val, batch_size=32, shuffle_t
         X_train, y_train, X_val, y_val: Training and validation data
         batch_size (int): Batch size for data loaders
         shuffle_train (bool): Whether to shuffle training data
+        num_workers (int): Number of worker threads for data loading
+        pin_memory (bool): Whether to pin memory for data loading
 
     Returns:
         tuple: (train_loader, val_loader)
@@ -266,16 +277,24 @@ def create_data_loaders(X_train, y_train, X_val, y_val, batch_size=32, shuffle_t
         torch.FloatTensor(y_val)
     )
 
+    loader_kwargs = {
+        'batch_size': batch_size,
+        'num_workers': num_workers,
+        'pin_memory': pin_memory,
+    }
+    if num_workers > 0:
+        loader_kwargs['persistent_workers'] = True
+
     # Create data loaders
     train_loader = DataLoader(
         train_dataset,
-        batch_size=batch_size,
-        shuffle=shuffle_train
+        shuffle=shuffle_train,
+        **loader_kwargs
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        **loader_kwargs
     )
 
     return train_loader, val_loader

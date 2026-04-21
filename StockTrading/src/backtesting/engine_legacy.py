@@ -10,6 +10,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from datetime import datetime
+from src.utils.torch_runtime import get_model_device, resolve_torch_runtime
 warnings.filterwarnings('ignore')
 
 
@@ -155,15 +156,16 @@ class BacktestEngine:
         predictions = []
         current_prices = []
         signals = []
-        
+        model_device = get_model_device(model)
+
         # Generate predictions for entire dataset
         for i in range(sequence_length, len(feature_values)):
             # Prepare input sequence with all features
             sequence = feature_values[i-sequence_length:i]  # Shape: (sequence_length, num_features)
             scaled_sequence = scaler.transform(sequence)
-            
+
             # Convert to tensor and add batch dimension
-            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0)  # Shape: (1, sequence_length, num_features)
+            input_tensor = torch.FloatTensor(scaled_sequence).unsqueeze(0).to(model_device)  # Shape: (1, sequence_length, num_features)
             
             # Generate prediction
             model.eval()
@@ -675,7 +677,8 @@ if __name__ == "__main__":
     scaler_path = data_directory / "models" / "scaler.pkl"
     
     # Load model and data
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    runtime = resolve_torch_runtime('auto')
+    device = runtime.device
     
     # Initialize model with correct architecture (matching PyTorchOptimized.py)
     model = ImprovedLSTM(
