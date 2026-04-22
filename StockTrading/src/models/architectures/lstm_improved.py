@@ -18,6 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from pathlib import Path
+import re
 import joblib
 import warnings
 warnings.filterwarnings('ignore')
@@ -41,9 +42,9 @@ set_seed(42)
 # ==================== Configuration ====================
 class Config:
     runtime = resolve_torch_runtime('auto')
-    data_directory = Path(__file__).parent.parent
-    stock_symbol = "AAPL"
-    price_data_path = data_directory / "data" / f"{stock_symbol}.csv"
+    data_directory = Path(__file__).parent.parent.parent
+    stock_symbol = "GOOG"
+    price_data_path = data_directory / "data" / "price" / f"{stock_symbol}.csv"
     
     # Data parameters
     look_back = 20  # Reduced from 60 - simpler patterns
@@ -84,6 +85,49 @@ class Config:
 config = Config()
 
 # ==================== Feature Engineering (NO DATA LEAKAGE) ====================
+
+def normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize common market-data column name variants to:
+    date, open, high, low, close, volume.
+    """
+    df = df.copy()
+
+    canonical_aliases = {
+        "date": {"date", "datetime", "timestamp", "time"},
+        "open": {"open", "opening price"},
+        "high": {"high"},
+        "low": {"low"},
+        "close": {"close", "adj close", "adjusted close", "closing price"},
+        "volume": {"volume", "vol"},
+    }
+
+    rename_map = {}
+    used_targets = set()
+
+    for col in df.columns:
+        normalized = col.strip().lower()
+        normalized = re.sub(r"^\d+\.\s*", "", normalized)  # e.g., "4. close"
+        normalized = normalized.replace("_", " ").replace("-", " ")
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+
+        for target, aliases in canonical_aliases.items():
+            if normalized in aliases and target not in used_targets:
+                rename_map[col] = target
+                used_targets.add(target)
+                break
+
+    df = df.rename(columns=rename_map)
+
+    required = {"date", "high", "low", "close"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(
+            f"Missing required columns after normalization: {missing}. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    return df
 
 def calculate_returns_and_features(df: pd.DataFrame, fit_scaler=True, scaler=None) -> Tuple[pd.DataFrame, StandardScaler]:
     """
@@ -819,6 +863,7 @@ def main():
 
     # Load data
     df = pd.read_csv(config.price_data_path)
+    df = normalize_ohlcv_columns(df)
     df['date'] = pd.to_datetime(df['date'])
     df = df.sort_values('date').reset_index(drop=True)
     
