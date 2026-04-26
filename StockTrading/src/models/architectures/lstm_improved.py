@@ -43,8 +43,8 @@ set_seed(42)
 class Config:
     runtime = resolve_torch_runtime('auto')
     data_directory = Path(__file__).parent.parent.parent
-    stock_symbol = "GOOG"
-    price_data_path = data_directory / "data" / "price" / f"{stock_symbol}.csv"
+    stock_symbol: str = ""  # set at runtime from user input in main()
+    price_data_path: Path = Path()  # set at runtime after stock_symbol is known
     
     # Data parameters
     look_back = 20  # Reduced from 60 - simpler patterns
@@ -860,6 +860,17 @@ def main():
     print(f"{'='*80}\n")
     
     print_torch_runtime_summary(config.runtime)
+
+    # Prompt user for stock symbol (not hardcoded)
+    symbol_input = input("Enter stock symbol (e.g. AAPL, MSFT, GOOG): ").strip().upper()
+    if not symbol_input:
+        raise ValueError("Stock symbol must not be empty.")
+    config.stock_symbol = symbol_input
+    config.price_data_path = config.data_directory / "data" / "price" / f"{config.stock_symbol}.csv"
+    if not config.price_data_path.exists():
+        raise FileNotFoundError(
+            f"Price data not found for symbol '{config.stock_symbol}' at {config.price_data_path}."
+        )
 
     # Load data
     df = pd.read_csv(config.price_data_path)

@@ -26,7 +26,7 @@ warnings.filterwarnings('ignore')
 idx = pd.IndexSlice
 
 path = pathlib.Path(__file__).parent
-data = path.parent.parent / "data" / "price" / "AAPL.csv"
+data = path.parent.parent / "data" / "price" / "GOOG.csv"
 
 df = pd.read_csv(data)
 #print(df.info())
