@@ -13,6 +13,12 @@ Key improvements:
 8. Realistic trading metrics
 """
 
+import os
+# Must be set before `import torch` so the HIP runtime picks it up on init.
+# PyTorch ROCm 6.2 wheels need this for RDNA3 (gfx1100, RX 7000-series); without it,
+# LSTM/MIOpen kernels fail with "HIP error: invalid device function". No-op on NVIDIA / CPU.
+os.environ.setdefault('HSA_OVERRIDE_GFX_VERSION', '11.0.0')
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
